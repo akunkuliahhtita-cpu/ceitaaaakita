@@ -9,15 +9,16 @@ async function client() {
   return {supabase,user,error};
 }
 function refresh(){revalidatePath("/app/premium");revalidatePath("/app/pengaturan");revalidatePath("/admin/review");revalidatePath("/app/review");revalidatePath("/review");revalidatePath("/");}
-export async function saveReview(input:PurchaseReviewInput) {
+export async function saveReview(input:PurchaseReviewInput & {photos:string[]}) {
   const invalid=validatePurchaseReview(input);if(invalid)return {error:invalid};
+  if(!Array.isArray(input.photos)||input.photos.length>5||input.photos.some(url=>typeof url!=="string"||url.length>2048||!url.startsWith(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/review-photos/`)))return {error:"Foto ulasan tidak valid. Pilih ulang foto lalu coba lagi."};
   const {supabase,user,error:profileError}=await client();
   if(profileError)return {error:"Profil belum siap. Coba lagi sebentar, ya."};
   const {data:order,error:orderError}=await supabase.from("orders").select("id,user_id,plan_id,status,base_amount").eq("id",input.orderId).eq("user_id",user.id).maybeSingle();
   if(orderError||!eligibleReviewOrder(order,user.id))return {error:"Ulasan hanya untuk pesanan berbayar milikmu yang telah disetujui."};
   const {data:existing,error:readError}=await supabase.from("reviews").select("id").eq("order_id",input.orderId).eq("user_id",user.id).maybeSingle();
   if(readError)return {error:"Ulasan belum bisa dimuat."};
-  const values={rating:input.rating,comment:reviewText(input.comment),display_name:reviewText(input.displayName)};
+  const values={rating:input.rating,comment:reviewText(input.comment),display_name:reviewText(input.displayName),photos:input.photos};
   const query=existing?supabase.from("reviews").update(values).eq("id",existing.id).eq("user_id",user.id):supabase.from("reviews").insert({...values,order_id:input.orderId,user_id:user.id});
   const {error}=await query;
   if(error)return {error:error.code==="23505"?"Pesanan ini sudah memiliki ulasan. Muat ulang untuk mengeditnya.":error.message.includes("Batas ulasan")?"Maksimal 5 pengiriman atau edit setiap 10 menit. Tunggu sebentar, ya.":"Ulasan belum tersimpan. Muat ulang lalu coba lagi, ya."};

@@ -15,14 +15,14 @@ export async function readReviews(client:SupabaseClient|null,options:{page?:numb
  const sort=options.sort==="helpful"?"helpful":"newest";
  const summary:ReviewSummary={total:0,average:0,distribution:[5,4,3,2,1].map(rating=>({rating,count:0}))};
  const empty:ReviewPageData={reviews:[],error:true,total:0,summary,page,stars,sort};if(!client)return empty;
- let query=client.from("review_feed").select("id,name,rating,title,body,helpful_count,voted,day,plan_name",{count:"exact"});if(stars)query=query.eq("rating",stars);
+ let query=client.from("review_feed").select("id,name,rating,title,body,photos,helpful_count,voted,day,plan_name",{count:"exact"});if(stars)query=query.eq("rating",stars);
  if(sort==="helpful")query=query.order("helpful_count",{ascending:false});
  query=query.order("created_at",{ascending:false}).order("id",{ascending:false}).range(page*REVIEW_PAGE_SIZE,(page+1)*REVIEW_PAGE_SIZE-1);
  try{
  const [{data,error,count},{data:totals,error:summaryError}]=await Promise.all([query,client.rpc("public_review_summary")]);
  if(error||summaryError||!totals||typeof totals!=="object")return empty;
  summary.total=Number(totals.total);summary.average=Number(totals.average);summary.distribution=[5,4,3,2,1].map(rating=>({rating,count:Number(totals.distribution?.[String(rating)]??0)}));
- return {reviews:(data??[]).map(row=>({id:row.id,name:row.name,rating:Number(row.rating),title:row.title,body:row.body,helpful:Number(row.helpful_count),voted:Boolean(row.voted),day:row.day,planName:row.plan_name})),error:false,total:count??0,summary,page,stars,sort};
+ return {reviews:(data??[]).map(row=>({id:row.id,name:row.name,rating:Number(row.rating),title:row.title,body:row.body,photos:Array.isArray(row.photos)?row.photos.filter((photo:unknown):photo is string=>typeof photo==="string"):[],helpful:Number(row.helpful_count),voted:Boolean(row.voted),day:row.day,planName:row.plan_name})),error:false,total:count??0,summary,page,stars,sort};
  }catch{return empty;}
 }
 
